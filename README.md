@@ -101,6 +101,7 @@ only noise differs.
 | **SCUNet real-psnr** | 36.39 (+1.52) | **34.95 (+5.06)** | **32.28 (+8.38)** |
 | Restormer realDenoise | 36.38 (+1.51) | 34.78 (+4.89) | 31.58 (+7.67) |
 | SCUNet real-gan | 34.89 (+0.02) | 33.60 (+3.70) | 31.40 (+7.49) |
+| **NAFNet-SIDD-width64** | 33.39 (−1.48) 🔴 | 31.99 (+2.09) | 29.38 (+5.48) |
 | DRUNet, best σ per row | **37.36 (+2.48)** | 34.47 (+4.58) | 30.74 (+6.83) |
 
 **SCUNet `real-psnr` is the strongest blind denoiser in the set**, and its margin over Restormer
@@ -111,9 +112,15 @@ DRUNet at a wrong σ scores **−2.73 dB**, i.e. worse than leaving the image al
 The GAN variant costs 0.88–1.50 dB and is **effectively a no-op at ISO 1600** (+0.02 dB). It is a
 perceptual mode, never the default, and it should be gated off low-noise input.
 
-⚠️ What this does *not* establish: NAFNet was not in the run (no PyTorch NAFNet in our oracle set),
-so the literal replace-vs-complement question against NAFNet is still open. NIND is also DSLR-class
-hardware, and PSNR judges the GAN variant on the axis it deliberately trades away.
+**And it replaces the incumbent.** NAFNet-SIDD-width64 is last among the blind denoisers at every
+ISO — 3.00 / 2.96 / 2.90 dB behind — despite being **6.5× larger** (116.0 M vs 17.9 M params), and at
+ISO 1600 it scores **−1.48 dB, worse than leaving the image alone**. That is precisely the failure
+SCUNet's randomized-degradation training targets: NAFNet trains on SIDD's five smartphone sensors,
+and NIND is DSLR-class Canon hardware, so being *off the training sensors* is the whole test.
+
+⚠️ What this does *not* establish: it is a **generalization** result. Nothing here speaks to NAFNet's
+in-domain SIDD performance, which is what a phone photo would exercise. NIND is DSLR-class hardware,
+and PSNR judges the GAN variant on the axis it deliberately trades away.
 
 ## Licence
 

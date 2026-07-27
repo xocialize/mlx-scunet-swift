@@ -42,16 +42,15 @@ generated attention mask, and relative-position-bias indexing. `ConvTransBlock` 
 between a conv path and a transformer path and concatenates. The queue's note — *"write once,
 reusable"* — is the point: this unlocks the Swin family generally.
 
-## ⚠️ V4 is still open, and it decides positioning not viability
+### On V4, as it looked at Stage 0
 
-**No primary source reports SCUNet's SIDD or DND** — the authors deliberately skipped it. That
-measurement decides whether SCUNet **replaces or complements** NAFNet. It needs corpus **C5** (ISO
-brackets + dark frames), which also serves Restormer's real-denoise and DRUNet's σ selection.
+**No primary source reports SCUNet's SIDD or DND** — the authors deliberately skipped it — so
+whether SCUNet **replaces or complements** NAFNet was unmeasured, and the queue said *"do the
+measurement before the port"*.
 
-The queue says *"do the measurement before the port"*. That gate is about **positioning**, not about
-whether the port is buildable: the licence is clean, the weights are first-party, and the measurement
-requires C5 either way. Stage 0 was therefore completed so the row is ready to build the moment the
-decision lands.
+Stage 0 proceeded anyway on the reasoning that the gate is about **positioning**, not viability: the
+licence is clean, the weights are first-party, and the measurement was needed either way. That call
+held — see **V4** below, which was answered on NIND rather than SIDD/DND and came out decisively.
 
 ## Stage 1 ✅ PASSED (2026-07-27) — core ported, all gates green
 
@@ -168,6 +167,7 @@ Full record: `mlxengine-image/corpus/nind/RESULTS.md`.
 | **SCUNet real-psnr** | 36.39 (+1.52) | **34.95 (+5.06)** | **32.28 (+8.38)** |
 | Restormer realDenoise | 36.38 (+1.51) | 34.78 (+4.89) | 31.58 (+7.67) |
 | SCUNet real-gan | 34.89 (+0.02) | 33.60 (+3.70) | 31.40 (+7.49) |
+| **NAFNet-SIDD-width64** | 33.39 (−1.48) 🔴 | 31.99 (+2.09) | 29.38 (+5.48) |
 | DRUNet, best σ per row | **37.36 (+2.48)** | 34.47 (+4.58) | 30.74 (+6.83) |
 
 `real-psnr` wins at 6400 and 25600 and ties Restormer at 1600, and **its margin over Restormer grows
@@ -177,13 +177,25 @@ motivated the row. DRUNet beats it at 1600 *when σ is right*, and scores **−2
 The GAN variant costs 0.88–1.50 dB and is a **no-op at ISO 1600** (+0.02 dB): a perceptual mode,
 never the default, and it should be gated off low-noise input.
 
-⚠️ Still outstanding: **NAFNet was not in the run** — no PyTorch NAFNet in our oracle set — so V4's
-literal replace-vs-complement question against NAFNet remains open. NIND is DSLR-class hardware, and
-PSNR judges the GAN variant on the axis it deliberately trades away.
+**NAFNet-SIDD-width64 is last at every ISO** — 3.00 / 2.96 / 2.90 dB behind SCUNet despite **6.5×
+the parameters** (116.0 M vs 17.9 M) — and at ISO 1600 it scores **−1.48 dB, worse than doing
+nothing**. Exactly the generalization failure the queue predicted for it: SIDD's five smartphone
+sensors vs DSLR-class Canon.
+
+🔴 **This arm was nearly not run, for a bad reason.** It was recorded as blocked on *"no PyTorch
+NAFNet in our oracle set"* — a category error. The requirement is a verified **implementation**, not a
+PyTorch one, and we hold two (`xocialize/nafnet-mlx`, `xocialize/mlx-nafnet-swift`). It took ~20 min
+once posed correctly, and it changed the conclusion from "strongest of the three we hold" to
+"replaces the incumbent". **State the requirement, not the artefact you happened to look for.**
+
+⚠️ Limits: a **generalization** result — it says nothing about NAFNet in-domain on SIDD, which is what
+a phone photo exercises. NIND is DSLR-class hardware, and PSNR judges the GAN variant on the axis it
+deliberately trades away.
 
 ## Remaining
 
-- [ ] Add the **NAFNet arm** to the NIND measurement — the one thing V4 literally asks for.
+Nothing blocking. Product validation for the fleet as a whole still wants corpus C1–C5
+(`mlxengine-todo/CORPUS-NEEDS.md`).
 
 ## Reproduce Stage 0
 
