@@ -6,7 +6,7 @@ Upstream: [`cszn/SCUNet`](https://github.com/cszn/SCUNet) — **Apache-2.0**, ze
 Weights first-party from the [`cszn/KAIR` v1.0 release](https://github.com/cszn/KAIR/releases/tag/v1.0)
 (MIT). **17,946,072 parameters.**
 
-## Stage 0 ✅ PASSED (2026-07-27) — core port NOT started
+## Stage 0 ✅ PASSED (2026-07-27)
 
 | Fact | Verified |
 |---|---|
@@ -53,10 +53,52 @@ whether the port is buildable: the licence is clean, the weights are first-party
 requires C5 either way. Stage 0 was therefore completed so the row is ready to build the moment the
 decision lands.
 
+## Stage 1 ✅ PASSED (2026-07-27) — core ported, all gates green
+
+`swift run -c release scunet-gate oracle/goldens oracle/converted/scunet_color_real_psnr/model.safetensors`
+
+| Gate | Content | Worst relative error | tol |
+|---|---|---|---|
+| S0 | key contract · **540 tensors, 17,946,072 params**, strict update clean, both checkpoints | exact | — |
+| S1 | stored bias table, gathered bias, SW mask | **0.00e+00** (all five exact) | 0 |
+| S2 | WMSA end-to-end, W and SW | 2.36e-07 | 2e-6 |
+| S3 | Block W/SW, ConvTransBlock W/SW | 4.57e-07 | 2e-6 |
+| S4 | stride-conv down, **convtranspose up (0.00e+00)**, head, tail | 1.11e-06 | 2e-6 |
+| S5 | full model 64² / 128² / **100² (replication pad + crop)** | 3.42e-06 | 2e-5 |
+
+### Why the gate ladder is shaped the way it is
+
+Window attention's two porting errors are **shape-safe** — they produce a plausible image rather
+than an error, so a single end-to-end gate would report "slightly off" without naming a cause:
+
+- **QKV head split.** `rearrange(qkv, 'b nw np (threeh c) -> threeh b nw np c').chunk(3, dim=0)` puts
+  **all q heads, then all k, then all v** in the projection's output channels. Splitting per-head
+  into (q,k,v) triples is shape-identical and silently wrong. Caught by S2.
+- **SW mask.** Only the *last* window row and column are masked — the wrap-around the cyclic roll
+  creates. Omitting it lets opposite image edges attend to each other. Caught by S1 (the table,
+  exact) before S2 consumes it.
+
+S1 gating the *tables* at `tol: 0` is what makes this ladder diagnostic: all five land at exactly
+0.00e+00, so the pre-permuted `(nHeads, 2w−1, 2w−1)` layout and the mask geometry are proven, not
+inferred from a downstream number that merely looks small.
+
+### Two traps found while writing the Swift, not in the Python
+
+1. **`Module` reflection collects every stored `MLXArray` property as a parameter.** The constant
+   relative-position gather table, declared as a plain `let relIndex: MLXArray`, appeared in
+   `parameters()` as **28 phantom tensors** and S0 failed with 28 missing keys. It is now boxed in a
+   non-`Module` class (`RelativeIndexTable`) — which also lets all 28 blocks share one table, since
+   it depends only on `window`.
+2. **`padToMultiple` here is replication, not reflection.** The sibling DRUNet port reflect-pads;
+   SCUNet's `ReplicationPad2d` is shape-identical and differs only at the borders. The 64²/128²
+   goldens bypass padding entirely, so **only the 100² case discriminates** — that is why it exists.
+
+`mlx-swift`'s `roll` takes a single shift, so the cyclic shift is two sequential rolls on independent
+axes; that composes to upstream's joint roll exactly (S2 SW, 1.93e-07).
+
 ## Remaining
 
-- [ ] Port the core — WMSA, Block (W/SW), ConvTransBlock, the SCUNet UNet.
-- [ ] Goldens, conversion, gates; package; publish; registry row.
+- [ ] Stage 2: `MLXSCUNet` package + conformance suite, publish weights, registry row.
 - [ ] **V4** measurement against corpus C5.
 
 ## Reproduce Stage 0

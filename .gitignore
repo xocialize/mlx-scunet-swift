@@ -8,3 +8,6 @@ oracle/weights/
 oracle/converted/
 oracle/hf*/
 oracle/__pycache__/
+oracle/goldens/
+
+# NOTE: Tests/SCUNetMLXTests/Resources/goldens/ IS committed — those are the parity fixtures.
