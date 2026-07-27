@@ -119,11 +119,31 @@ Gated against the PyTorch oracle on the CPU stream, fp32, **relative** error:
 - **full model** — 64^2 / 128^2 / 100^2, worst 3.42e-06 (100^2 exercises the internal
   `ReplicationPad2d` and the crop back)
 
-## ⚠️ Honest positioning
+## Measured on real sensor noise
 
-**No primary source reports SCUNet's SIDD or DND** — the authors deliberately skipped both. Whether
-this *replaces* or *complements* NAFNet on real sensor noise is therefore unmeasured, not settled.
-The port is gated; the ranking claim is not made.
+**No primary source reports SCUNet's SIDD or DND** — the authors deliberately skipped both — so we
+measured it on [NIND](https://commons.wikimedia.org/wiki/Category:Natural_Image_Noise_Dataset) (CC0):
+5 scenes x 4 ISOs on a locked-off camera with a compensating shutter, 768^2 centre crops, PSNR
+against the ISO-100 reference. Pairs verified pixel-aligned and brightness-matched first.
+
+| model | ISO 1600 | ISO 6400 | ISO 25600 |
+|---|---|---|---|
+| *untouched input* | *34.87* | *29.90* | *23.91* |
+| **SCUNet real-psnr** | 36.39 (+1.52) | **34.95 (+5.06)** | **32.28 (+8.38)** |
+| Restormer realDenoise | 36.38 (+1.51) | 34.78 (+4.89) | 31.58 (+7.67) |
+| SCUNet real-gan | 34.89 (+0.02) | 33.60 (+3.70) | 31.40 (+7.49) |
+| DRUNet, best sigma per row | **37.36 (+2.48)** | 34.47 (+4.58) | 30.74 (+6.83) |
+
+`real-psnr` is the strongest blind denoiser in the set, and its margin over Restormer **grows with
+noise** (+0.01 -> +0.17 -> +0.70 dB) — consistent with the randomized-degradation training that is
+the model's whole thesis. A correctly-tuned DRUNet wins at ISO 1600, but that requires knowing sigma;
+at a wrong sigma it scores **-2.73 dB**, worse than leaving the image alone.
+
+`real-gan` costs 0.88-1.50 dB and is **effectively a no-op at ISO 1600** (+0.02 dB) — a perceptual
+mode, not a default.
+
+⚠️ NAFNet was not in this run, NIND is DSLR-class hardware, and PSNR judges the GAN variant on the
+axis it deliberately trades away.
 
 Code: Apache-2.0 ([`cszn/SCUNet`](https://github.com/cszn/SCUNet)). Weights: MIT, published
 first-party by the author in the

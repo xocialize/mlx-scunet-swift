@@ -157,9 +157,33 @@ degradation into the checkpoint; DRUNet takes σ as a model input and is the bac
 a caller can read as "this backer has no strength", distinct from "strength zero". The conformance
 suite asserts the descriptor keeps saying no.
 
+## V4 ✅ MEASURED (2026-07-27) — SCUNet is the strongest blind denoiser we hold
+
+Measured on **NIND** (CC0), 5 scenes × 4 ISOs, 768² centre crops, PSNR vs the ISO-100 reference.
+Full record: `mlxengine-image/corpus/nind/RESULTS.md`.
+
+| model | ISO 1600 | ISO 6400 | ISO 25600 |
+|---|---|---|---|
+| *untouched input* | *34.87* | *29.90* | *23.91* |
+| **SCUNet real-psnr** | 36.39 (+1.52) | **34.95 (+5.06)** | **32.28 (+8.38)** |
+| Restormer realDenoise | 36.38 (+1.51) | 34.78 (+4.89) | 31.58 (+7.67) |
+| SCUNet real-gan | 34.89 (+0.02) | 33.60 (+3.70) | 31.40 (+7.49) |
+| DRUNet, best σ per row | **37.36 (+2.48)** | 34.47 (+4.58) | 30.74 (+6.83) |
+
+`real-psnr` wins at 6400 and 25600 and ties Restormer at 1600, and **its margin over Restormer grows
+with noise** (+0.01 → +0.17 → +0.70 dB) — consistent with the randomized-degradation training that
+motivated the row. DRUNet beats it at 1600 *when σ is right*, and scores **−2.73 dB** when it is not.
+
+The GAN variant costs 0.88–1.50 dB and is a **no-op at ISO 1600** (+0.02 dB): a perceptual mode,
+never the default, and it should be gated off low-noise input.
+
+⚠️ Still outstanding: **NAFNet was not in the run** — no PyTorch NAFNet in our oracle set — so V4's
+literal replace-vs-complement question against NAFNet remains open. NIND is DSLR-class hardware, and
+PSNR judges the GAN variant on the axis it deliberately trades away.
+
 ## Remaining
 
-- [ ] **V4** measurement against corpus C5 — positioning vs NAFNet, still open.
+- [ ] Add the **NAFNet arm** to the NIND measurement — the one thing V4 literally asks for.
 
 ## Reproduce Stage 0
 

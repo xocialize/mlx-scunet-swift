@@ -87,11 +87,33 @@ land at exactly `0.00e+00`, which makes a downstream failure diagnostic instead 
 Full record, including the three upstream traps and the two that only exist on the Swift side:
 [`PORT-STATUS.md`](PORT-STATUS.md).
 
-## ⚠️ Honest positioning
+## Measured on real sensor noise
 
-**No primary source reports SCUNet's SIDD or DND** — the authors skipped both deliberately. Whether
-this *replaces* or *complements* NAFNet on real sensor noise is unmeasured, not settled. The port is
-gated; the ranking claim is not made.
+**No primary source reports SCUNet's SIDD or DND** — the authors skipped both deliberately — so we
+measured it ourselves on [NIND](https://commons.wikimedia.org/wiki/Category:Natural_Image_Noise_Dataset)
+(CC0): 5 scenes × 4 ISOs on a locked-off camera with a compensating shutter, 768² centre crops, PSNR
+against the ISO-100 reference. Pairs were verified pixel-aligned and brightness-matched first, so
+only noise differs.
+
+| model | ISO 1600 | ISO 6400 | ISO 25600 |
+|---|---|---|---|
+| *untouched input* | *34.87* | *29.90* | *23.91* |
+| **SCUNet real-psnr** | 36.39 (+1.52) | **34.95 (+5.06)** | **32.28 (+8.38)** |
+| Restormer realDenoise | 36.38 (+1.51) | 34.78 (+4.89) | 31.58 (+7.67) |
+| SCUNet real-gan | 34.89 (+0.02) | 33.60 (+3.70) | 31.40 (+7.49) |
+| DRUNet, best σ per row | **37.36 (+2.48)** | 34.47 (+4.58) | 30.74 (+6.83) |
+
+**SCUNet `real-psnr` is the strongest blind denoiser in the set**, and its margin over Restormer
+*grows* with noise (+0.01 → +0.17 → +0.70 dB) — consistent with the randomized-degradation training
+that motivated the model. A correctly-tuned DRUNet beats it at ISO 1600, but that requires knowing σ;
+DRUNet at a wrong σ scores **−2.73 dB**, i.e. worse than leaving the image alone.
+
+The GAN variant costs 0.88–1.50 dB and is **effectively a no-op at ISO 1600** (+0.02 dB). It is a
+perceptual mode, never the default, and it should be gated off low-noise input.
+
+⚠️ What this does *not* establish: NAFNet was not in the run (no PyTorch NAFNet in our oracle set),
+so the literal replace-vs-complement question against NAFNet is still open. NIND is also DSLR-class
+hardware, and PSNR judges the GAN variant on the axis it deliberately trades away.
 
 ## Licence
 
