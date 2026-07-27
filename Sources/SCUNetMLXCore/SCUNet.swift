@@ -121,11 +121,95 @@ public final class SCUNet: Module, @unchecked Sendable {
         return runStage(tail, x + x1)
     }
 
-    /// Denoise an NHWC RGB image in [0,1]. Blind — there is nothing to configure.
+    /// Denoise an NHWC RGB image in [0,1], whole frame. Blind — there is nothing to configure.
     public func denoise(_ image: MLXArray) -> MLXArray {
         let (padded, size) = Self.padToMultiple(image, Self.sizeMultiple)
         let out = self(padded)
         return clip(out[0..., 0 ..< size.0, 0 ..< size.1, 0...], min: 0, max: 1)
+    }
+
+    /// Denoise in overlapping tiles with a feathered blend, so peak activation is **one tile's
+    /// worth and flat in resolution** — a bigger image runs more tiles, not a bigger graph.
+    ///
+    /// SCUNet needs this more than the conv-net siblings do. Its attention cost is quadratic in the
+    /// window (fixed, 64 positions) but *linear in window count*, so the score tensors alone are
+    /// `heads × nWindows × 64 × 64` per block — hundreds of MB per block at 1080p, across 28 blocks.
+    /// Untiled is viable at small sizes and not a claim to make at 4K without measuring.
+    ///
+    /// - Parameters:
+    ///   - tile: tile extent, rounded down to a multiple of `sizeMultiple` (64).
+    ///   - overlap: context pixels per side, discarded into the blend; also 64-aligned.
+    ///
+    /// ⚠️ The 64-alignment is not cosmetic. `forward` pads to a multiple of 64 and the window grid is
+    /// laid out from the tile's own origin, so a tile whose origin is *not* 64-aligned attends over a
+    /// differently-phased set of windows than its neighbour — a seam that no amount of feathering
+    /// removes. Keeping `tile` and `overlap` 64-aligned makes `step` 64-aligned, which puts every
+    /// tile origin on the same phase.
+    public func denoiseTiled(_ image: MLXArray, tile: Int = 512, overlap: Int = 64,
+                             onTile: ((Int, Int) throws -> Void)? = nil) rethrows -> MLXArray {
+        let m = Self.sizeMultiple
+        let tile = max(m, (tile / m) * m)
+        let overlap = (overlap / m) * m
+        precondition(tile > 2 * overlap, "tile (\(tile)) must exceed 2·overlap (\(2 * overlap))")
+
+        let (b, h, w, c) = (image.dim(0), image.dim(1), image.dim(2), image.dim(3))
+        if h <= tile && w <= tile { return denoise(image) }
+
+        let step = tile - 2 * overlap
+        var acc = MLXArray.zeros([b, h, w, c], dtype: .float32)
+        var wsum = MLXArray.zeros([1, h, w, 1], dtype: .float32)
+
+        let total = ((h + step - 1) / step) * ((w + step - 1) / step)
+        var done = 0
+
+        for coreY in stride(from: 0, to: h, by: step) {
+            let inY0 = max(0, coreY - overlap)
+            let inY1 = min(h, coreY + step + overlap)
+            for coreX in stride(from: 0, to: w, by: step) {
+                try onTile?(done, total)
+                done += 1
+
+                let inX0 = max(0, coreX - overlap)
+                let inX1 = min(w, coreX + step + overlap)
+
+                let restored = denoise(image[0..., inY0 ..< inY1, inX0 ..< inX1, 0...])
+                let weight = Self.featherWeights(height: inY1 - inY0, width: inX1 - inX0,
+                                                 ramp: overlap,
+                                                 topEdge: inY0 == 0, bottomEdge: inY1 == h,
+                                                 leftEdge: inX0 == 0, rightEdge: inX1 == w)
+                acc[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] =
+                    acc[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] + restored.asType(.float32) * weight
+                wsum[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] =
+                    wsum[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] + weight
+
+                // Realize and release per tile — MLX otherwise accumulates unbounded residency
+                // across a long sequential graph, which is exactly what a tile loop is.
+                eval(acc, wsum)
+                MLX.Memory.clearCache()
+            }
+        }
+        return clip(acc / maximum(wsum, MLXArray(1e-8)), min: 0, max: 1).asType(image.dtype)
+    }
+
+    /// Separable linear ramp; image-boundary edges are left unramped, since nothing overlaps them
+    /// and a falloff there would divide by a small weight and amplify noise at the frame border.
+    private static func featherWeights(height: Int, width: Int, ramp: Int,
+                                       topEdge: Bool, bottomEdge: Bool,
+                                       leftEdge: Bool, rightEdge: Bool) -> MLXArray {
+        func profile(_ n: Int, _ startFlat: Bool, _ endFlat: Bool) -> [Float] {
+            var v = [Float](repeating: 1, count: n)
+            guard ramp > 0 else { return v }
+            let r = min(ramp, n / 2)
+            for i in 0 ..< r {
+                let t = (Float(i) + 0.5) / Float(r)
+                if !startFlat { v[i] = t }
+                if !endFlat { v[n - 1 - i] = min(v[n - 1 - i], t) }
+            }
+            return v
+        }
+        let y = MLXArray(profile(height, topEdge, bottomEdge), [1, height, 1, 1])
+        let x = MLXArray(profile(width, leftEdge, rightEdge), [1, 1, width, 1])
+        return y * x
     }
 
     /// **Replication** pad to a multiple of `m`, bottom/right only — upstream `ReplicationPad2d`.

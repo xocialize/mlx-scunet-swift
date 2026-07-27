@@ -96,10 +96,70 @@ inferred from a downstream number that merely looks small.
 `mlx-swift`'s `roll` takes a single shift, so the cyclic shift is two sequential rolls on independent
 axes; that composes to upstream's joint roll exactly (S2 SW, 1.93e-07).
 
+## Stage 2 ✅ PASSED (2026-07-27) — `MLXSCUNet.SCUNetRestorePackage`, published
+
+`imageRestore`, **`supportsStrength: false`** — see below. Descriptor `scunet-denoise`.
+Weights: [`mlx-community/SCUNet-color-real-psnr-fp32`](https://huggingface.co/mlx-community/SCUNet-color-real-psnr-fp32)
+· [`mlx-community/SCUNet-color-real-gan-fp32`](https://huggingface.co/mlx-community/SCUNet-color-real-gan-fp32).
+Both re-downloaded fresh and re-run through the full gate ladder — all green.
+
+Conformance: 12 offline tests green (MAT, CAN run + cadence, manifest/licence, footprint split,
+`QuantConfigured`, distinct repos, tile geometry).
+
+### Footprint — MEASURED, and the gate under-read it by 3.3×
+
+```
+[scunet-real-psnr] SPLIT floor=0.10GB peak=4.48GB act=4.38GB retain=0.56GB
+                   engine=0.18GB reserve=2.00GB load=0.0s run=4.9s   @1920x1080
+```
+
+Declared resident 180 MB (floor 103.5 MB), activation **5.0 GB** (measured 4.38 GB).
+
+The gate's `--bench` read **1.33 GB** for the same tile size. Same direction, same cause, and the
+same size of miss as every prior port in this batch: `--bench` calls the core directly and reads
+after the fact, so it sees neither the engine's decode/encode buffers nor the transient peak that
+the harness's 150 ms sampling catches. **`--bench` is for comparing tile sizes; the harness number
+is the admission basis.**
+
+### Tiling: SCUNet gets off far more lightly than Restormer
+
+Untiled is not viable — 10.04 GB phys at 1024², linear in pixels, so ~20 GB at 1080p. Tiled:
+
+| tile | phys @1080p | time |
+|---|---|---|
+| 256 | 0.74 GB | 9.1 s |
+| **384** | **1.33 GB** | **4.9 s** |
+| 512 | 3.60 GB | 3.4 s |
+
+Overlap sweep at 512², tiled at 256, against the full-frame reference:
+
+| overlap | PSNR | seam / interior gradient |
+|---|---|---|
+| 0 (and 16, 32 → rounded down) | 58.32 dB | 1.08× |
+| **64** (and 96 → rounded to 64) | **71.60 dB** | **1.00×** |
+
+**1.00× means tile boundaries are statistically indistinguishable from ordinary image content** —
+a much better result than the sibling ports got, and the reason is architectural: SCUNet's mixing is
+strictly local (8-px windows plus 3×3 convs), whereas Restormer's channel attention reduces over the
+whole feature map, so a tile boundary there changes global statistics. Window attention tiles almost
+for free.
+
+The 64-alignment is enforced (16, 32 and 96 all round down, visibly) because it is a **correctness**
+property: `forward` pads to a multiple of 64 and lays the window grid out from the tile's own
+origin, so an unaligned origin shifts the window phase between neighbours and leaves a seam that
+feathering cannot remove.
+
+### Why `supportsStrength: false` is the interesting declaration
+
+SCUNet is the fleet's only genuinely **blind** restorer. NAFNet / FFTformer / Restormer bake a
+degradation into the checkpoint; DRUNet takes σ as a model input and is the backer that *has* a dial
+(contract 1.30.0 exists for it). SCUNet takes neither — so `appliedStrength` comes back `nil`, which
+a caller can read as "this backer has no strength", distinct from "strength zero". The conformance
+suite asserts the descriptor keeps saying no.
+
 ## Remaining
 
-- [ ] Stage 2: `MLXSCUNet` package + conformance suite, publish weights, registry row.
-- [ ] **V4** measurement against corpus C5.
+- [ ] **V4** measurement against corpus C5 — positioning vs NAFNet, still open.
 
 ## Reproduce Stage 0
 
