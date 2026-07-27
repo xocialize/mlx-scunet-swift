@@ -1,0 +1,14 @@
+mlx-scunet-swift
+================
+
+Port code: MIT (this repository).
+
+Upstream: SCUNet — https://github.com/cszn/SCUNet
+Zhang et al., "Practical Blind Denoising via Swin-Conv-UNet and Data Synthesis".
+License: Apache-2.0. See LICENSE-upstream.
+
+Weights are published first-party by the same author in the cszn/KAIR release
+v1.0 (https://github.com/cszn/KAIR/releases/tag/v1.0), whose LICENSE is MIT.
+
+NOTE: a third-party mirror exists at deepinv/scunet on Hugging Face carrying NO
+licence statement at all. This port does not use it.

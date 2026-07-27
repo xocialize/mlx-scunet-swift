@@ -1,0 +1,10 @@
+.DS_Store
+.build/
+.swiftpm/
+xcuserdata/
+oracle/upstream/
+oracle/.venv/
+oracle/weights/
+oracle/converted/
+oracle/hf*/
+oracle/__pycache__/
