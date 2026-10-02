@@ -293,13 +293,13 @@ let defaultWeights = "oracle/converted/scunet_color_real_psnr/model.safetensors"
 switch mode {
 case "--bench":
     // GPU stream: the footprint question is about the device that will actually run it.
-    MLX.Device.setDefault(device: .gpu)
+    MLX.Device.setDefault(device: Device(.gpu))
     gateBench(rest.first ?? defaultWeights)
 case "--tile":
-    MLX.Device.setDefault(device: .gpu)
+    MLX.Device.setDefault(device: Device(.gpu))
     gateTile(rest.first ?? defaultWeights)
 case "--all":
-    MLX.Device.setDefault(device: .cpu)   // parity gates run on the CPU stream
+    MLX.Device.setDefault(device: Device(.cpu))   // parity gates run on the CPU stream
     let goldens = rest.first ?? "oracle/goldens"
     let weights = rest.count > 1 ? rest[1] : defaultWeights
     gateS0(weights)
