@@ -46,6 +46,12 @@ let response = try await engine.run(ImageRestoreRequest(image: image))
 Weights: [`mlx-community/SCUNet-color-real-psnr-fp32`](https://huggingface.co/mlx-community/SCUNet-color-real-psnr-fp32)
 · [`mlx-community/SCUNet-color-real-gan-fp32`](https://huggingface.co/mlx-community/SCUNet-color-real-gan-fp32).
 
+**Engine-materialized weights read in place since 0.1.2 (AB-A-0112).** MLXEngine downloads the declared
+`weightSources` into its model store before `load()`; `load()` reads that copy (flat or snapshot layout) instead of
+fetching a second one through swift-transformers' `HubApi`. It also reads `<root>/models/<org>/<name>/`, where earlier
+versions downloaded, so existing installs aren't fetched again. `HubApi` remains only the backstop outside the engine
+(no store, or nothing materialized); an explicit `weightsURL` bypasses all of it.
+
 ## Window attention tiles almost for free
 
 SCUNet is a Swin-Conv-UNet: `ConvTransBlock` splits channels between a conv path and a
