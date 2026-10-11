@@ -34,6 +34,7 @@ let package = Package(
         .testTarget(name: "SCUNetMLXTests", dependencies: [
             "SCUNetMLXCore", "MLXSCUNet",
             .product(name: "MLX", package: "mlx-swift"),
+            .product(name: "MLXNN", package: "mlx-swift"),
             .product(name: "MLXToolKit", package: "mlx-engine-swift"),
             .product(name: "MLXServeCore", package: "mlx-engine-swift"),
             .product(name: "MLXServeConformance", package: "mlx-engine-swift"),
